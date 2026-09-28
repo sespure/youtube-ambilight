@@ -7,49 +7,124 @@
 
 import Cocoa
 import SafariServices
-import WebKit
 
 let extensionBundleIdentifier = "com.youtubeambilight.safari.Extension"
 
-class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHandler {
+class ViewController: NSViewController {
 
-    @IBOutlet var webView: WKWebView!
+    private var statusImageView: NSImageView!
+    private var titleLabel: NSTextField!
+    private var statusLabel: NSTextField!
+    private var actionButton: NSButton!
+
+    override func loadView() {
+        self.view = NSView(frame: NSRect(x: 0, y: 0, width: 440, height: 320))
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        self.webView.navigationDelegate = self
-
-        self.webView.configuration.userContentController.add(self, name: "controller")
-
-        self.webView.loadFileURL(Bundle.main.url(forResource: "Main", withExtension: "html")!, allowingReadAccessTo: Bundle.main.resourceURL!)
+        setupUI()
+        updateExtensionStatus()
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { (state, error) in
-            guard let state = state, error == nil else {
-                // Insert code to inform the user that something went wrong.
-                return
-            }
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        updateExtensionStatus()
+    }
 
+    private func setupUI() {
+        view.wantsLayer = true
+
+        // Icon
+        statusImageView = NSImageView(frame: .zero)
+        statusImageView.translatesAutoresizingMaskIntoConstraints = false
+        statusImageView.imageScaling = .scaleProportionallyUpOrDown
+        statusImageView.image = NSImage(named: "LargeIcon") ?? NSImage(named: "AppIcon") ?? NSImage(named: NSImage.applicationIconName)
+        view.addSubview(statusImageView)
+
+        // Title
+        titleLabel = NSTextField(labelWithString: "YouTube Ambilight")
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = NSFont.systemFont(ofSize: 18, weight: .bold)
+        titleLabel.alignment = .center
+        view.addSubview(titleLabel)
+
+        // Status Label
+        statusLabel = NSTextField(wrappingLabelWithString: "Checking extension status…")
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.alignment = .center
+        view.addSubview(statusLabel)
+
+        // Action Button
+        actionButton = NSButton(title: "Open Safari Settings…", target: self, action: #selector(openPreferencesClicked))
+        actionButton.translatesAutoresizingMaskIntoConstraints = false
+        actionButton.bezelStyle = .rounded
+        actionButton.controlSize = .large
+        actionButton.keyEquivalent = "\r"
+        view.addSubview(actionButton)
+
+        NSLayoutConstraint.activate([
+            statusImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusImageView.topAnchor.constraint(equalTo: view.topAnchor, constant: 36),
+            statusImageView.widthAnchor.constraint(equalToConstant: 96),
+            statusImageView.heightAnchor.constraint(equalToConstant: 96),
+
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.topAnchor.constraint(equalTo: statusImageView.bottomAnchor, constant: 16),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
+            statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
+            statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
+
+            actionButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            actionButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 24),
+            actionButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
+            actionButton.heightAnchor.constraint(equalToConstant: 32)
+        ])
+    }
+
+    private func updateExtensionStatus() {
+        SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { [weak self] (state, error) in
             DispatchQueue.main.async {
-                if #available(macOS 13, *) {
-                    webView.evaluateJavaScript("show(\(state.isEnabled), true)")
+                guard let self = self else { return }
+                if let state = state {
+                    if state.isEnabled {
+                        self.statusLabel.stringValue = "Extension is currently enabled in Safari.\nYou can configure settings directly on YouTube."
+                    } else {
+                        self.statusLabel.stringValue = "Extension is installed. Turn it on in Safari Extensions settings to activate Ambilight."
+                    }
                 } else {
-                    webView.evaluateJavaScript("show(\(state.isEnabled), false)")
+                    self.statusLabel.stringValue = "Extension is installed. Turn it on in Safari Extensions settings to activate Ambilight."
                 }
             }
         }
     }
 
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if (message.body as! String != "open-preferences") {
-            return;
+    @objc private func openPreferencesClicked() {
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { [weak self] error in
+            if error != nil {
+                DispatchQueue.main.async {
+                    if let script = NSAppleScript(source: "tell application \"Safari\" to activate\ntell application \"System Events\" to tell process \"Safari\" to keystroke \",\" using command down") {
+                        script.executeAndReturnError(nil)
+                    }
+                }
+            }
         }
 
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
-            DispatchQueue.main.async {
-                NSApplication.shared.terminate(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            // Also open Safari and press Cmd+, via AppleScript if Safari is frontmost
+            let scriptSource = """
+            tell application "Safari"
+                activate
+            end tell
+            """
+            if let script = NSAppleScript(source: scriptSource) {
+                script.executeAndReturnError(nil)
             }
         }
     }

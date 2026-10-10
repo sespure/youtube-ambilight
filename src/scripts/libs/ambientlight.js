@@ -787,6 +787,9 @@ Video ready state: ${readyStateToString(videoElem?.readyState)}`);
       'fullscreenchange',
       async function fullscreenchange() {
         await this.updateSizes();
+        // Safari applies the fullscreen layout after the event. Recalculate on
+        // the next frame so the projector uses the final video bounds.
+        requestAnimationFrame(() => this.updateSizes());
       }.bind(this),
       false
     );

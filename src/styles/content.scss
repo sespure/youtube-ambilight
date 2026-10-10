@@ -475,8 +475,7 @@ html[data-ambientlight-enabled] {
       --ytal-page-background: color-mix(in srgb, #808080 var(--ytal-page-background-greyness, 0%), #ffffff);
     }
 
-    &,
-    .ambientlight__container {
+    & {
       background: #fff !important;
       background: var(--ytal-page-background) !important;
       background-color: var(--ytal-page-background) !important;
@@ -488,8 +487,7 @@ html[data-ambientlight-enabled] {
     @supports (background-color: color-mix(in srgb, #000 0%, #000)) {
       --ytal-page-background: color-mix(in srgb, #808080 var(--ytal-page-background-greyness, 0%), #000000);
     }
-    &,
-    .ambientlight__container {
+    & {
       background: #000 !important;
       background: var(--ytal-page-background) !important;
       background-color: var(--ytal-page-background) !important;
@@ -3480,6 +3478,18 @@ html[data-ambientlight-safari] {
   .ambientlight__projector {
     contain: none !important;
     overflow: visible !important;
+  }
+
+  :fullscreen .ambientlight__container {
+    /* A negative stacking level sits behind Safari's opaque fullscreen backdrop. */
+    z-index: 0;
+  }
+
+  :fullscreen .html5-video-container,
+  :fullscreen .ytp-chrome-bottom,
+  :fullscreen .ytp-chrome-top {
+    position: relative;
+    z-index: 1;
   }
 
   ytd-comment-thread-renderer,
